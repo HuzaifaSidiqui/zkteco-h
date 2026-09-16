@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: relay_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-relay_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-relay_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-relay_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-relay_user} -d ${POSTGRES_DB:-relay_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - relay_net
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: relay_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-relay_user}:${POSTGRES_PASSWORD:-relay_pass}@db:5432/${POSTGRES_DB:-relay_db}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - relay_logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - relay_net
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: relay_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    networks:
+      - relay_net
+
+volumes:
+  pgdata:
+  relay_logs:
+  caddy_data:
+  caddy_config:
+
+networks:
+  relay_net:
+    driver: bridge

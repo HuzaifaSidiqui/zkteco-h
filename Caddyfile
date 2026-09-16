@@ -1,0 +1,23 @@
+{$DOMAIN} {
+    encode gzip zstd
+
+    # Proxy all traffic to FastAPI uvicorn container
+    reverse_proxy web:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Generous timeout settings for device long-polling or batch pushes
+        transport http {
+            read_timeout 60s
+            write_timeout 60s
+        }
+    }
+
+    # Structured request access logging
+    log {
+        output stdout
+        format console
+    }
+}
