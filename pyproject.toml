@@ -21,6 +21,13 @@ dependencies = [
     "python-dateutil>=2.9.0,<3.0.0",
 ]
 
+[tool.uv]
+package = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
