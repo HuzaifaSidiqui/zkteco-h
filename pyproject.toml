@@ -23,6 +23,10 @@ package = false
 [tool.setuptools]
 packages = ["app"]
 
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["alembic*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
