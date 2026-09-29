@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # App & Ingress
     DOMAIN: str = "relay.example.com"
     LOG_LEVEL: str = "INFO"
-    LOG_DIR: str = "logs"
+    LOG_DIR: str = "/tmp/logs" if __import__("os").environ.get("VERCEL") else "logs"
     ADMIN_TOKEN: str = "change-me-super-secret-admin-token-12345"
 
     # Database

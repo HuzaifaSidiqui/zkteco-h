@@ -21,11 +21,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Initializing Attendance Relay Service for domain: %s", settings.DOMAIN)
 
     # 1. Initialize database schema & seed devices
-    init_db()
-
-    # 2. Preload cached employee mappings from DB
-    with SessionLocal() as db:
-        odoo_client.load_cached_employees(db)
+    try:
+        init_db()
+        with SessionLocal() as db:
+            odoo_client.load_cached_employees(db)
+    except Exception as exc:
+        logger.error("Initial database handshake deferred (check DATABASE_URL): %s", exc)
 
     # 3. Probe Odoo connection and device field (non-blocking if Odoo is offline)
     try:
@@ -40,14 +41,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
 
     # 4. Start background scheduler
-    start_scheduler()
+    try:
+        start_scheduler()
+    except Exception as exc:
+        logger.warning("Background scheduler start deferred: %s", exc)
 
     logger.info("Relay service startup completed. Ready for terminal connections.")
     yield
 
     # Shutdown
     logger.info("Shutting down Attendance Relay Service...")
-    stop_scheduler()
+    try:
+        stop_scheduler()
+    except Exception:
+        pass
     logger.info("Relay service shutdown complete.")
 
 
@@ -66,9 +73,19 @@ app.include_router(admin.router)
 @app.get("/health", tags=["Health"])
 def health_check() -> JSONResponse:
     """Service health probe for Docker / orchestrator healthchecks."""
+    db_ok = False
+    try:
+        from sqlalchemy import text
+        with SessionLocal() as db:
+            db.execute(text("SELECT 1"))
+            db_ok = True
+    except Exception:
+        db_ok = False
+
     return JSONResponse(
         content={
-            "status": "healthy",
+            "status": "healthy" if db_ok else "degraded",
+            "database_connected": db_ok,
             "service": "zkteco-odoo-relay",
             "version": "1.0.0"
         },
