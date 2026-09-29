@@ -73,7 +73,7 @@ def setup_logging(log_level: str = "INFO", log_dir: str = "logs") -> None:
         raw_request_logger.setLevel(logging.INFO)
         raw_request_logger.addHandler(file_handler)
         raw_request_logger.propagate = False
-    except OSError as exc:
+    except Exception as exc:
         # On read-only or restricted serverless filesystems, fall back safely to stdout
         raw_request_logger.setLevel(logging.INFO)
         raw_request_logger.addHandler(stdout_handler)

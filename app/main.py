@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from fastapi import FastAPI, Request
@@ -40,11 +41,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             exc
         )
 
-    # 4. Start background scheduler
-    try:
-        start_scheduler()
-    except Exception as exc:
-        logger.warning("Background scheduler start deferred: %s", exc)
+    # 4. Start background scheduler (only in non-serverless persistent environments)
+    if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        try:
+            start_scheduler()
+        except Exception as exc:
+            logger.warning("Background scheduler start deferred: %s", exc)
+    else:
+        logger.info("Serverless environment detected; skipping persistent background scheduler.")
 
     logger.info("Relay service startup completed. Ready for terminal connections.")
     yield
