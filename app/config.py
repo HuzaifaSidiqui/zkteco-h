@@ -1,7 +1,12 @@
 import json
+import logging
+import os
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationInfo, field_validator
+from pydantic_core import PydanticUndefined
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger("relay.config")
 
 
 class DeviceConfig(BaseModel):
@@ -20,7 +25,7 @@ class Settings(BaseSettings):
     # App & Ingress
     DOMAIN: str = "relay.example.com"
     LOG_LEVEL: str = "INFO"
-    LOG_DIR: str = "/tmp/logs" if __import__("os").environ.get("VERCEL") else "logs"
+    LOG_DIR: str = "/tmp/logs" if os.environ.get("VERCEL") else "logs"
     ADMIN_TOKEN: str = "change-me-super-secret-admin-token-12345"
 
     # Database
@@ -64,6 +69,19 @@ class Settings(BaseSettings):
     # Terminal Timezone (terminals typically send naive local time YYYY-MM-DD HH:MM:SS)
     DEVICE_TIMEZONE: str = "UTC"
 
+    @field_validator("*", mode="before")
+    @classmethod
+    def sanitize_empty_strings(cls, v: Any, info: ValidationInfo) -> Any:
+        """Coerces empty or whitespace-only environment variable strings to field defaults."""
+        if isinstance(v, str) and not v.strip():
+            field_name = info.field_name
+            if field_name:
+                field = cls.model_fields.get(field_name)
+                if field and field.default is not PydanticUndefined:
+                    return field.default
+                return None
+        return v
+
     @property
     def parsed_devices(self) -> List[DeviceConfig]:
         """Parses the DEVICES string into DeviceConfig objects."""
@@ -82,4 +100,8 @@ class Settings(BaseSettings):
         return {d.sn for d in self.parsed_devices}
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except Exception as exc:
+    logger.error("Failed to initialize Settings from environment (%s). Using fallback defaults.", exc)
+    settings = Settings(_env_file=None, HEARTBEAT_MINUTES=15)
