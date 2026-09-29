@@ -92,18 +92,21 @@ app.include_router(admin.router)
 def health_check() -> JSONResponse:
     """Service health probe for Docker / orchestrator healthchecks."""
     db_ok = False
+    db_err = None
     try:
         from sqlalchemy import text
         with SessionLocal() as db:
             db.execute(text("SELECT 1"))
             db_ok = True
-    except Exception:
+    except Exception as exc:
         db_ok = False
+        db_err = str(exc)
 
     return JSONResponse(
         content={
             "status": "healthy" if db_ok else "degraded",
             "database_connected": db_ok,
+            "database_error": db_err,
             "service": "zkteco-odoo-relay",
             "version": "1.0.0"
         },
