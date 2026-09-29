@@ -1,7 +1,15 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/health",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/iclock/:path*",
       "destination": "/api/index.py"
     }
   ]
