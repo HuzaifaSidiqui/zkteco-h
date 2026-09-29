@@ -27,32 +27,22 @@ def resolve_database_url(raw_url: str) -> str:
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://"):]
 
-    # If standard postgresql:// without explicit driver specified:
+    # Convert standard postgresql:// to pure-Python pg8000 driver
     if url.startswith("postgresql://"):
-        use_pg8000 = False
-
-        # In Vercel / AWS Lambda, psycopg2 often has libpq shared library issues;
-        # test if psycopg2 can be imported cleanly
-        try:
-            import psycopg2  # type: ignore # noqa: F401
-        except Exception:
-            use_pg8000 = True
-
-        if use_pg8000:
-            parsed = urlparse(url)
-            qs = parse_qs(parsed.query)
-            # Remove parameters not accepted by pg8000 connect()
-            qs.pop("channel_binding", None)
-            new_query = urlencode(qs, doseq=True)
-            url = urlunparse((
-                "postgresql+pg8000",
-                parsed.netloc,
-                parsed.path,
-                parsed.params,
-                new_query,
-                parsed.fragment
-            ))
-            logger.info("Using pure-Python pg8000 driver for PostgreSQL connection.")
+        parsed = urlparse(url)
+        qs = parse_qs(parsed.query)
+        # Remove parameters not accepted by pg8000 connect()
+        qs.pop("channel_binding", None)
+        new_query = urlencode(qs, doseq=True)
+        url = urlunparse((
+            "postgresql+pg8000",
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment
+        ))
+        logger.info("Configured pure-Python pg8000 driver for PostgreSQL connection.")
 
     return url
 
