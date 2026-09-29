@@ -1,42 +1,26 @@
-import os
 import sys
-import traceback
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse, PlainTextResponse
+import os
+import json
 
-app = FastAPI(title="ZKTeco Relay")
+def app(environ, start_response):
+    status = '200 OK'
+    headers = [('Content-type', 'application/json; charset=utf-8')]
+    start_response(status, headers)
 
-@app.get("/health")
-def health_check():
-    return JSONResponse(
-        content={
-            "status": "healthy",
-            "service": "zkteco-odoo-relay",
-            "version": "1.0.0"
-        },
-        status_code=200
-    )
-
-@app.get("/debug")
-def debug_probe():
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    results = {}
-    modules_to_test = [
-        "app.config",
-        "app.database",
-        "app.models",
-        "app.services.odoo_client",
-        "app.services.attlog_parser",
-        "app.routers.iclock",
-        "app.routers.admin",
-        "app.main"
-    ]
-    for mod in modules_to_test:
+    # Test what packages can be imported
+    installed = {}
+    for pkg in ["fastapi", "pydantic", "sqlalchemy", "pg8000"]:
         try:
-            __import__(mod)
-            results[mod] = "OK"
-        except Exception:
-            results[mod] = traceback.format_exc()
-            return JSONResponse(content={"error_at": mod, "results": results}, status_code=500)
+            m = __import__(pkg)
+            installed[pkg] = getattr(m, "__version__", "installed")
+        except Exception as e:
+            installed[pkg] = f"ERROR: {type(e).__name__}: {e}"
 
-    return JSONResponse(content={"status": "all_imports_passed", "modules": results}, status_code=200)
+    data = {
+        "status": "healthy",
+        "service": "zkteco-odoo-relay",
+        "python_version": sys.version,
+        "path_info": environ.get("PATH_INFO"),
+        "installed_packages": installed
+    }
+    return [json.dumps(data, indent=2).encode("utf-8")]
