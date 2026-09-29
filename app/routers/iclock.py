@@ -40,8 +40,13 @@ def log_and_verify_request(
     headers_dict = dict(request.headers)
     query_str = str(request.query_params)
 
-    # Check if SN is in configured allowed list
-    is_authorized = bool(sn and sn in settings.allowed_device_sns)
+    # Check if SN is in configured allowed list or registered in the database devices table
+    is_authorized = bool(
+        sn and (
+            sn in settings.allowed_device_sns
+            or db.query(Device).filter(Device.sn == sn).first() is not None
+        )
+    )
 
     # 1. Log to rotating file
     raw_request_logger.info(

@@ -85,14 +85,17 @@ class Settings(BaseSettings):
     @property
     def parsed_devices(self) -> List[DeviceConfig]:
         """Parses the DEVICES string into DeviceConfig objects."""
+        raw_str = (self.DEVICES or "").strip()
+        if (raw_str.startswith("'") and raw_str.endswith("'")) or (raw_str.startswith('"') and raw_str.endswith('"')):
+            raw_str = raw_str[1:-1].strip()
         try:
-            raw = json.loads(self.DEVICES)
+            raw = json.loads(raw_str)
             if isinstance(raw, list):
                 return [DeviceConfig(**item) for item in raw]
             return []
         except Exception:
             # Fallback simple split if plain comma-separated serials given
-            serials = [s.strip() for s in self.DEVICES.split(",") if s.strip()]
+            serials = [s.strip(" '\"") for s in raw_str.split(",") if s.strip(" '\"")]
             return [DeviceConfig(sn=s, site_name="Site", label=f"Terminal {s}") for s in serials]
 
     @property
