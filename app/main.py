@@ -1,5 +1,13 @@
 import logging
 import os
+import sys
+from pathlib import Path
+
+# Ensure application root directory is at the head of sys.path
+root_dir = str(Path(__file__).resolve().parent.parent)
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
+
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from fastapi import FastAPI, Request
@@ -78,6 +86,7 @@ app.include_router(iclock.router)
 app.include_router(admin.router)
 
 
+@app.get("/", tags=["Health"])
 @app.get("/health", tags=["Health"])
 @app.get("/api/health", tags=["Health"])
 def health_check() -> JSONResponse:
