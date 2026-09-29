@@ -159,6 +159,29 @@ def refresh_employees_endpoint(
         )
 
 
+@router.post("/flush-queue")
+@router.get("/flush-queue")
+def flush_queue_endpoint(
+    authorized: bool = Depends(verify_admin_auth)
+) -> Dict[str, Any]:
+    """Manually triggers an immediate flush of the attendance sync queue to Odoo."""
+    from app.services.sync_worker import flush_sync_queue
+    try:
+        processed = flush_sync_queue()
+        return {
+            "status": "success",
+            "message": f"Processed {processed} queued attendance record(s).",
+            "processed_count": processed,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as exc:
+        logger.error("Admin flush-queue failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Sync queue flush failed: {exc}"
+        )
+
+
 @router.get("", response_class=HTMLResponse)
 def get_admin_dashboard(
     request: Request,
@@ -251,7 +274,8 @@ def get_admin_dashboard(
             <div class="title">ZKTeco uFace800 &rarr; Odoo Relay Status</div>
             <div class="meta">Server Time: {status_data['timestamp']} &bull; Auto-refreshing every 30s</div>
         </div>
-        <div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn" style="background-color:#059669;" onclick="flushQueue()">Flush Sync Queue</button>
             <button class="btn" onclick="refreshEmployees()">Refresh Odoo Employees</button>
         </div>
     </div>
@@ -331,6 +355,24 @@ def get_admin_dashboard(
 </div>
 
 <script>
+async function flushQueue() {{
+    const token = "{current_token}";
+    try {{
+        const res = await fetch("/admin/flush-queue?token=" + encodeURIComponent(token), {{
+            method: "POST"
+        }});
+        const data = await res.json();
+        if (res.ok) {{
+            alert("Success! " + data.message);
+            window.location.reload();
+        }} else {{
+            alert("Error: " + (data.detail || JSON.stringify(data)));
+        }}
+    }} catch (e) {{
+        alert("Failed to communicate with server: " + e);
+    }}
+}}
+
 async function refreshEmployees() {{
     const token = "{current_token}";
     try {{

@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from app.database import get_db
 from app.logging_config import raw_request_logger
 from app.models import Device, ParseFailure, RawAttendanceEvent, RawDeviceRequest, SyncQueue
 from app.services.attlog_parser import parse_attlog_payload
+from app.services.sync_worker import flush_sync_queue
 
 logger = logging.getLogger("relay.iclock")
 
@@ -125,6 +126,7 @@ async def get_cdata(
 @router.post("/cdata", response_class=PlainTextResponse)
 async def post_cdata(
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ) -> Response:
     """
@@ -202,6 +204,8 @@ async def post_cdata(
             "Processed ATTLOG from %s: %s parsed, %s failures stored",
             sn, len(successful_records), len(parse_failures)
         )
+        # In serverless environments, dispatch sync worker immediately after responding to device
+        background_tasks.add_task(flush_sync_queue)
 
     # For table=OPERLOG, table=USERINFO/USER or other tables,
     # raw_device_requests already captured the entire body. No further processing needed.
