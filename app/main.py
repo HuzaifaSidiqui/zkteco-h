@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.config import settings
 from app.database import SessionLocal, init_db
 from app.logging_config import setup_logging
@@ -99,6 +100,23 @@ def health_check() -> JSONResponse:
         },
         status_code=200
     )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": "FastAPI Route Not Found",
+                "request_url": str(request.url),
+                "scope_path": request.scope.get("path"),
+                "raw_path": request.scope.get("raw_path", b"").decode("utf-8", errors="replace"),
+                "x_matched_path": request.headers.get("x-matched-path"),
+                "method": request.method
+            }
+        )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 if __name__ == "__main__":
