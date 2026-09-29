@@ -78,6 +78,7 @@ app.include_router(admin.router)
 
 
 @app.get("/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
 def health_check() -> JSONResponse:
     """Service health probe for Docker / orchestrator healthchecks."""
     db_ok = False

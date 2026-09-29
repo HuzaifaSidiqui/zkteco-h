@@ -1,9 +1,7 @@
-from http.server import BaseHTTPRequestHandler
+import os
+import sys
 
-class handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(b'{"status":"healthy","service":"zkteco-odoo-relay","version":"1.0.0"}')
-        return
+# Ensure project root is in sys.path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.main import app
