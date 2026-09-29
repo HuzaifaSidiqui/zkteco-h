@@ -13,6 +13,17 @@ logger = logging.getLogger("relay.database")
 def resolve_database_url(raw_url: str) -> str:
     """Normalizes database URL and selects driver based on runtime environment."""
     url = raw_url.strip()
+    is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
+    # If running on Vercel and the URL still points to local docker container 'db:5432',
+    # fall back to a local sqlite db to prevent a 30s TCP connect timeout hanging cold starts.
+    if is_serverless and "@db:5432" in url:
+        logger.warning(
+            "Default docker hostname 'db:5432' detected in serverless environment without custom DATABASE_URL configured. "
+            "Using temporary SQLite database to avoid network timeout."
+        )
+        return "sqlite:////tmp/relay.db"
+
     if url.startswith("postgres://"):
         url = "postgresql://" + url[len("postgres://"):]
 
@@ -50,7 +61,13 @@ db_url = resolve_database_url(settings.DATABASE_URL)
 is_sqlite = db_url.startswith("sqlite")
 is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 
-connect_args = {"check_same_thread": False} if is_sqlite else {}
+if is_sqlite:
+    connect_args = {"check_same_thread": False}
+elif "pg8000" in db_url:
+    connect_args = {"timeout": 5}
+else:
+    connect_args = {"connect_timeout": 5}
+
 pool_kwargs = {}
 if not is_sqlite:
     if is_serverless:

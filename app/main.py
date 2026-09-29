@@ -21,45 +21,48 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan context for startup initialization and graceful shutdown."""
     logger.info("Initializing Attendance Relay Service for domain: %s", settings.DOMAIN)
 
-    # 1. Initialize database schema & seed devices
-    try:
-        init_db()
-        with SessionLocal() as db:
-            odoo_client.load_cached_employees(db)
-    except Exception as exc:
-        logger.error("Initial database handshake deferred (check DATABASE_URL): %s", exc)
+    is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 
-    # 3. Probe Odoo connection and device field (non-blocking if Odoo is offline)
-    try:
-        odoo_client.probe_device_field()
-        with SessionLocal() as db:
-            odoo_client.refresh_employee_cache(db)
-    except Exception as exc:
-        logger.warning(
-            "Initial Odoo handshake/cache load deferred (Odoo may be currently unreachable): %s. "
-            "Relay will continue accepting terminal punches and sync once Odoo is online.",
-            exc
-        )
+    if not is_serverless:
+        # 1. Initialize database schema & seed devices (persistent Docker/VM environments)
+        try:
+            init_db()
+            with SessionLocal() as db:
+                odoo_client.load_cached_employees(db)
+        except Exception as exc:
+            logger.error("Initial database handshake deferred (check DATABASE_URL): %s", exc)
 
-    # 4. Start background scheduler (only in non-serverless persistent environments)
-    if not os.environ.get("VERCEL") and not os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        # 2. Probe Odoo connection and device field (non-blocking if Odoo is offline)
+        try:
+            odoo_client.probe_device_field()
+            with SessionLocal() as db:
+                odoo_client.refresh_employee_cache(db)
+        except Exception as exc:
+            logger.warning(
+                "Initial Odoo handshake/cache load deferred (Odoo may be currently unreachable): %s. "
+                "Relay will continue accepting terminal punches and sync once Odoo is online.",
+                exc
+            )
+
+        # 3. Start background scheduler
         try:
             start_scheduler()
         except Exception as exc:
             logger.warning("Background scheduler start deferred: %s", exc)
     else:
-        logger.info("Serverless environment detected; skipping persistent background scheduler.")
+        logger.info("Serverless environment detected; fast zero-blocking cold start active.")
 
     logger.info("Relay service startup completed. Ready for terminal connections.")
     yield
 
     # Shutdown
-    logger.info("Shutting down Attendance Relay Service...")
-    try:
-        stop_scheduler()
-    except Exception:
-        pass
-    logger.info("Relay service shutdown complete.")
+    if not is_serverless:
+        logger.info("Shutting down Attendance Relay Service...")
+        try:
+            stop_scheduler()
+        except Exception:
+            pass
+        logger.info("Relay service shutdown complete.")
 
 
 app = FastAPI(
